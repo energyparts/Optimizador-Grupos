@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Energy Parts · Groups Optimizer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --ep-dark:    #0D1F35;
+      --ep-mid:     #1E3A5F;
+      --ep-light:   #2A5298;
+      --ep-green:   #00C864;
+      --ep-green2:  #00A550;
+      --ep-accent:  #39FF88;
+      --surface:    #F0F4F8;
+      --white:      #FFFFFF;
+      --text:       #1A2535;
+      --muted:      #64748B;
+      --border:     #CBD5E1;
+      --shadow:     0 4px 24px rgba(13,31,53,.12);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--surface);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--ep-dark);
+      padding: 0 32px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      height: 66px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.3);
+    }
+    header img { height: 38px; object-fit: contain; }
+    .header-divider {
+      width: 1px; height: 32px;
+      background: rgba(255,255,255,.2);
+    }
+    .header-title {
+      font-size: 15px; font-weight: 700;
+      color: var(--white); letter-spacing: .5px;
+    }
+    .header-sub {
+      font-size: 11px; color: var(--ep-green);
+      font-weight: 500; letter-spacing: .3px;
+    }
+    .header-badge {
+      margin-left: auto;
+      background: var(--ep-green2);
+      color: #fff; border-radius: 20px;
+      padding: 4px 14px; font-size: 11px; font-weight: 700;
+      letter-spacing: .5px;
+    }
+
+    /* ── Layout ── */
+    .main { max-width: 920px; margin: 0 auto; padding: 32px 20px 60px; }
+
+    /* ── Steps ── */
+    .steps {
+      display: flex; gap: 0; margin-bottom: 28px;
+      background: var(--white); border-radius: 12px;
+      border: 1px solid var(--border);
+      overflow: hidden; box-shadow: var(--shadow);
+    }
+    .step {
+      flex: 1; padding: 14px 16px; display: flex;
+      align-items: center; gap: 10px;
+      border-right: 1px solid var(--border);
+      transition: background .2s;
+    }
+    .step:last-child { border-right: none; }
+    .step.active { background: linear-gradient(135deg, var(--ep-mid), var(--ep-dark)); }
+    .step.done   { background: #E8F5EE; }
+    .step-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 13px; flex-shrink: 0;
+      border: 2px solid var(--border);
+      color: var(--muted); background: var(--surface);
+    }
+    .step.active .step-num { background: var(--ep-green); border-color: var(--ep-green); color: #fff; }
+    .step.done   .step-num { background: var(--ep-green2); border-color: var(--ep-green2); color: #fff; }
+    .step-text  { font-size: 12px; font-weight: 600; color: var(--muted); }
+    .step.active .step-text { color: #fff; }
+    .step.done   .step-text { color: var(--ep-green2); }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--white); border-radius: 14px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow); margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .card-header {
+      background: linear-gradient(135deg, var(--ep-dark), var(--ep-mid));
+      padding: 14px 20px; display: flex; align-items: center; gap: 10px;
+    }
+    .card-header h3 {
+      color: #fff; font-size: 13px; font-weight: 700; letter-spacing: .4px;
+    }
+    .card-header span { color: var(--ep-green); font-size: 11px; margin-left: auto; }
+    .card-body { padding: 20px; }
+
+    /* ── Upload zones ── */
+    .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .drop-zone {
+      border: 2px dashed var(--border); border-radius: 10px;
+      padding: 28px 16px; text-align: center; cursor: pointer;
+      transition: all .2s; background: var(--surface);
+    }
+    .drop-zone:hover, .drop-zone.drag { border-color: var(--ep-green2); background: #E8F5EE; }
+    .drop-zone.loaded { border-color: var(--ep-green2); background: #F0FFF6; border-style: solid; }
+    .drop-icon { font-size: 34px; margin-bottom: 10px; }
+    .drop-label { font-size: 12px; font-weight: 600; color: var(--muted); }
+    .drop-zone.loaded .drop-label { color: var(--ep-green2); }
+    .drop-hint { font-size: 10px; color: #94a3b8; margin-top: 4px; }
+    input[type=file] { display: none; }
+
+    /* ── Stock badges ── */
+    .stock-grid { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
+    .stock-badge {
+      border-radius: 8px; padding: 8px 12px; text-align: center; min-width: 64px;
+      border: 1px solid; font-family: monospace;
+    }
+    .stock-badge .g-name { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+    .stock-badge .g-qty  { font-size: 20px; font-weight: 800; line-height: 1.1; color: var(--text); }
+    .stock-badge .g-unit { font-size: 9px; color: var(--muted); }
+
+    /* ── Options ── */
+    .options-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .opt-label { font-size: 12px; color: var(--muted); font-weight: 600; }
+    .num-btn {
+      padding: 6px 14px; border-radius: 6px; cursor: pointer;
+      font-weight: 700; font-size: 12px; transition: all .15s;
+      border: 1.5px solid var(--border); background: var(--white); color: var(--muted);
+    }
+    .num-btn.active {
+      background: var(--ep-mid); border-color: var(--ep-mid); color: #fff;
+    }
+
+    /* ── Generate button ── */
+    .btn-generate {
+      flex: 1; padding: 13px 20px; border: none; border-radius: 10px;
+      background: linear-gradient(135deg, var(--ep-green2), #007A3D);
+      color: #fff; font-size: 14px; font-weight: 800; cursor: pointer;
+      letter-spacing: .5px; transition: opacity .2s; box-shadow: 0 4px 16px rgba(0,168,80,.3);
+    }
+    .btn-generate:hover { opacity: .9; }
+    .btn-generate:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Loader ── */
+    .loader { text-align: center; padding: 60px 20px; }
+    .spinner {
+      width: 52px; height: 52px; margin: 0 auto 18px;
+      border: 3px solid #E2E8F0;
+      border-top-color: var(--ep-green2);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-text { font-size: 15px; color: var(--ep-mid); font-weight: 700; }
+    .loader-sub  { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+    /* ── Info grid ── */
+    .info-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 14px; padding: 16px;
+      background: linear-gradient(135deg, #F8FAFC, #EEF4FF);
+      border-radius: 10px; margin-bottom: 16px;
+      border: 1px solid #DBEAFE;
+    }
+    .info-item .info-lbl { font-size: 10px; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
+    .info-item .info-val { font-size: 13px; font-weight: 700; color: var(--text); font-family: monospace; }
+    .info-item.highlight .info-val { color: var(--ep-green2); font-size: 16px; }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead tr { background: var(--ep-dark); }
+    thead th { padding: 9px 8px; color: #fff; font-size: 10px; font-weight: 700; text-align: center; white-space: nowrap; }
+    tbody tr:nth-child(even) { background: #F8FAFC; }
+    tbody tr:hover { background: #EEF4FF; }
+    tbody td { padding: 6px 7px; text-align: center; font-family: monospace; font-size: 12px; border-bottom: 1px solid #EEF2F7; }
+    .td-num  { color: var(--muted); font-size: 10px; }
+    .td-pts  { font-weight: 700; color: var(--ep-mid); }
+    .td-cost { color: var(--muted); font-size: 11px; }
+    .badge-best   { color: #00A550; font-weight: 800; }
+    .badge-good   { color: #1E5FAF; font-weight: 700; }
+    .badge-valid  { color: #D97B00; font-weight: 600; }
+
+    /* ── Legend ── */
+    .legend { display: flex; gap: 18px; font-size: 11px; flex-wrap: wrap; margin-bottom: 10px; }
+    .legend span { font-weight: 600; }
+
+    /* ── Download button ── */
+    .btn-download {
+      width: 100%; padding: 14px; border: none; border-radius: 10px;
+      background: linear-gradient(135deg, var(--ep-mid), var(--ep-dark));
+      color: #fff; font-size: 14px; font-weight: 800; cursor: pointer;
+      letter-spacing: .5px; display: flex; align-items: center; justify-content: center; gap: 8px;
+      box-shadow: 0 4px 16px rgba(30,58,95,.3); transition: opacity .2s;
+    }
+    .btn-download:hover { opacity: .9; }
+
+    /* ── Reset ── */
+    .btn-reset {
+      background: none; border: 1.5px solid var(--border); border-radius: 8px;
+      padding: 10px 18px; cursor: pointer; color: var(--muted); font-size: 12px;
+      font-weight: 600; transition: all .15s;
+    }
+    .btn-reset:hover { border-color: var(--ep-mid); color: var(--ep-mid); }
+
+    /* ── Show more ── */
+    .btn-more {
+      display: block; margin: 10px auto; background: none;
+      border: 1.5px solid var(--border); border-radius: 8px;
+      padding: 7px 20px; cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 600;
+    }
+    .btn-more:hover { border-color: var(--ep-green2); color: var(--ep-green2); }
+
+    .footer-note {
+      text-align: center; font-size: 10px; color: var(--muted); margin-top: 10px;
+    }
+    @media (max-width: 600px) {
+      .upload-grid { grid-template-columns: 1fr; }
+      .steps { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <img src="/static/logo.png" alt="Energy Parts" onerror="this.style.display='none'"/>
+  <div class="header-divider"></div>
+  <div>
+    <div class="header-title">Groups Optimizer</div>
+    <div class="header-sub">Combinaciones de grupos · Notas de Crédito JCA</div>
+  </div>
+  <div class="header-badge">⚡ EPA191009JJ0</div>
+</header>
+
+<div class="main">
+
+  <!-- Steps indicator -->
+  <div class="steps" id="steps">
+    <div class="step active" id="s1"><div class="step-num">1</div><div class="step-text">Existencias</div></div>
+    <div class="step"        id="s2"><div class="step-num">2</div><div class="step-text">Nota de Crédito</div></div>
+    <div class="step"        id="s3"><div class="step-num">3</div><div class="step-text">Generar</div></div>
+    <div class="step"        id="s4"><div class="step-num">4</div><div class="step-text">Descargar</div></div>
+  </div>
+
+  <!-- Upload card -->
+  <div class="card" id="upload-card">
+    <div class="card-header">
+      <h3>📂 Cargar archivos</h3>
+      <span>Arrastra o haz clic en cada zona</span>
+    </div>
+    <div class="card-body">
+      <div class="upload-grid">
+        <!-- Stock -->
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--ep-mid);margin-bottom:8px;letter-spacing:.5px">
+            PASO 1 — EXISTENCIAS (.xlsx)
+          </div>
+          <div class="drop-zone" id="dz1"
+               onclick="document.getElementById('f1').click()"
+               ondragover="ev.preventDefault();this.classList.add('drag')"
+               ondragleave="this.classList.remove('drag')"
+               ondrop="ev.preventDefault();this.classList.remove('drag');handleStock(ev.dataTransfer.files[0])">
+            <div class="drop-icon" id="i1">📦</div>
+            <div class="drop-label" id="l1">Subir archivo de existencias</div>
+            <div class="drop-hint">Formato: Ubicación · Producto · Cantidad</div>
+          </div>
+          <input type="file" id="f1" accept=".xlsx,.xls" onchange="handleStock(this.files[0])"/>
+        </div>
+        <!-- PDF -->
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--ep-mid);margin-bottom:8px;letter-spacing:.5px">
+            PASO 2 — NOTA DE CRÉDITO (.pdf)
+          </div>
+          <div class="drop-zone" id="dz2"
+               onclick="document.getElementById('f2').click()"
+               ondragover="ev.preventDefault();this.classList.add('drag')"
+               ondragleave="this.classList.remove('drag')"
+               ondrop="ev.preventDefault();this.classList.remove('drag');handlePDF(ev.dataTransfer.files[0])">
+            <div class="drop-icon" id="i2">📄</div>
+            <div class="drop-label" id="l2">Subir Nota de Crédito JCA</div>
+            <div class="drop-hint">Extracción automática de puntos</div>
+          </div>
+          <input type="file" id="f2" accept=".pdf" onchange="handlePDF(this.files[0])"/>
+        </div>
+      </div>
+
+      <!-- Stock preview -->
+      <div id="stock-preview" style="display:none;margin-top:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--ep-mid);margin-bottom:10px">EXISTENCIAS DETECTADAS</div>
+        <div class="stock-grid" id="stock-badges"></div>
+      </div>
+
+      <!-- Options + generate -->
+      <div id="gen-area" style="display:none;margin-top:20px">
+        <div class="options-row">
+          <span class="opt-label">Combinaciones a generar:</span>
+          <button class="num-btn" onclick="setN(25)" id="n25">25</button>
+          <button class="num-btn active" onclick="setN(50)" id="n50">50</button>
+          <button class="num-btn" onclick="setN(100)" id="n100">100</button>
+          <button class="btn-generate" id="btn-gen" onclick="processFiles()">
+            ⚡ GENERAR COMBINACIONES
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loader -->
+  <div class="card" id="loader-card" style="display:none">
+    <div class="loader">
+      <div class="spinner"></div>
+      <div class="loader-text" id="loader-text">Procesando…</div>
+      <div class="loader-sub" id="loader-sub"></div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="results-area" style="display:none">
+    <!-- PDF info -->
+    <div class="card">
+      <div class="card-header"><h3>📋 Datos de la Nota de Crédito</h3></div>
+      <div class="card-body" style="padding:16px">
+        <div class="info-grid" id="info-grid"></div>
+      </div>
+    </div>
+
+    <!-- Combinations -->
+    <div class="card">
+      <div class="card-header">
+        <h3>📊 Combinaciones</h3>
+        <span id="combo-count"></span>
+      </div>
+      <div class="card-body" style="padding:16px">
+        <div class="legend">
+          <span class="badge-best">★ MUY UNIFORME</span> CV&lt;0.50
+          <span class="badge-good">✓ UNIFORME</span> CV&lt;0.65
+          <span class="badge-valid">· VÁLIDA</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead id="tbl-head"></thead>
+            <tbody id="tbl-body"></tbody>
+          </table>
+        </div>
+        <button class="btn-more" id="btn-more" onclick="toggleMore()" style="display:none"></button>
+
+        <button class="btn-download" id="btn-dl" onclick="downloadExcel()">
+          ⬇ &nbsp;DESCARGAR EXCEL
+        </button>
+        <div class="footer-note" id="footer-note"></div>
+        <div style="display:flex;justify-content:center;margin-top:14px">
+          <button class="btn-reset" onclick="resetAll()">↺ Nuevo análisis</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- .main -->
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let state = { stock:null, pdfFile:null, pdfInfo:null, combos:[], n:50, showAll:false };
+
+const G_COLORS = ["#4AADAD","#D4A017","#D96B64","#5CA869","#8E6BA0","#D4834A"];
+const G_LABELS = ["G6/G7","G5","G4","G3","G2","G1"];
+const MAX_Q    = () => state.stock ? [
+  state.stock.G6+state.stock.G7, state.stock.G5, state.stock.G4,
+  state.stock.G3, state.stock.G2, state.stock.G1
+] : [];
+
+// ── File handlers ──────────────────────────────────────────────────────────
+async function handleStock(file) {
+  if (!file) return;
+  const buf = await file.arrayBuffer();
+  const wb  = XLSX.read(buf);
+  const ws  = wb.Sheets[wb.SheetNames[0]];
+  const rows= XLSX.utils.sheet_to_json(ws, {header:1});
+  const s   = {G1:0,G2:0,G3:0,G4:0,G5:0,G6:0,G7:0};
+  for (const row of rows) {
+    if (!row[1] || row[2]==null) continue;
+    const m = String(row[1]).match(/\[G(\d)/);
+    if (m) { const g='G'+m[1]; if(g in s) s[g]+=parseInt(row[2])||0; }
+  }
+  state.stock = s;
+  document.getElementById('dz1').classList.add('loaded');
+  document.getElementById('i1').textContent = '✅';
+  document.getElementById('l1').textContent = file.name;
+  renderStockBadges();
+  checkReady();
+  updateSteps(1);
+}
+
+function handlePDF(file) {
+  if (!file) return;
+  state.pdfFile = file;
+  document.getElementById('dz2').classList.add('loaded');
+  document.getElementById('i2').textContent = '✅';
+  document.getElementById('l2').textContent = file.name;
+  checkReady();
+  updateSteps(2);
+}
+
+function checkReady() {
+  const show = state.stock && state.pdfFile;
+  document.getElementById('gen-area').style.display = show ? 'block' : 'none';
+  if (show) updateSteps(3);
+}
+
+// ── Stock badges ───────────────────────────────────────────────────────────
+function renderStockBadges() {
+  const s = state.stock;
+  const colors = G_COLORS;
+  const groups = ['G1','G2','G3','G4','G5','G6','G7'];
+  let html = groups.map((g,i) => `
+    <div class="stock-badge" style="background:${colors[i]}18;border-color:${colors[i]}55">
+      <div class="g-name" style="color:${colors[i]}">${g}</div>
+      <div class="g-qty">${s[g]}</div>
+      <div class="g-unit">uds</div>
+    </div>`).join('');
+  html += `<div class="stock-badge" style="background:#1E3A5F18;border-color:#1E3A5F55">
+    <div class="g-name" style="color:#1E5FAF;font-size:11px">G6+G7</div>
+    <div class="g-qty">${s.G6+s.G7}</div>
+    <div class="g-unit">pool</div>
+  </div>`;
+  document.getElementById('stock-badges').innerHTML = html;
+  document.getElementById('stock-preview').style.display = 'block';
+}
+
+// ── Steps ──────────────────────────────────────────────────────────────────
+function updateSteps(active) {
+  for (let i=1;i<=4;i++) {
+    const el=document.getElementById('s'+i);
+    el.className='step'+(i<active?' done':i===active?' active':'');
+  }
+}
+
+// ── N selector ──────────────────────────────────────────────────────────────
+function setN(n) {
+  state.n = n;
+  [25,50,100].forEach(v => {
+    document.getElementById('n'+v).classList.toggle('active', v===n);
+  });
+}
+
+// ── Process ────────────────────────────────────────────────────────────────
+async function processFiles() {
+  document.getElementById('upload-card').style.display   = 'none';
+  document.getElementById('loader-card').style.display   = 'block';
+  document.getElementById('results-area').style.display  = 'none';
+
+  try {
+    // 1. Extract PDF
+    setLoader('Leyendo nota de crédito…', 'Extrayendo subtotal y puntos del PDF');
+    const fd = new FormData();
+    fd.append('pdf', state.pdfFile);
+    const r1 = await fetch('/api/extract-pdf', {method:'POST', body:fd});
+    if (!r1.ok) throw new Error(await r1.text());
+    state.pdfInfo = await r1.json();
+    if (state.pdfInfo.error) throw new Error(state.pdfInfo.error);
+
+    // 2. Generate combinations
+    setLoader('Calculando combinaciones…', `Buscando ${state.n} combinaciones dentro del stock`);
+    const r2 = await fetch('/api/generate', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({stock:state.stock, info:state.pdfInfo, numCombos:state.n})
+    });
+    if (!r2.ok) throw new Error(await r2.text());
+    const data = await r2.json();
+    state.combos = data.combos;
+
+    // 3. Show results
+    document.getElementById('loader-card').style.display  = 'none';
+    document.getElementById('results-area').style.display = 'block';
+    updateSteps(4);
+    renderResults();
+  } catch(e) {
+    alert('Error: ' + e.message);
+    document.getElementById('loader-card').style.display  = 'none';
+    document.getElementById('upload-card').style.display  = 'block';
+    updateSteps(1);
+  }
+}
+
+function setLoader(text, sub) {
+  document.getElementById('loader-text').textContent = text;
+  document.getElementById('loader-sub').textContent  = sub;
+}
+
+// ── Render results ─────────────────────────────────────────────────────────
+function renderResults() {
+  const {pdfInfo: p, combos, stock} = state;
+  const maxQ = MAX_Q();
+  const fmt  = v => v != null ? '$'+Number(v).toLocaleString('es-MX',{minimumFractionDigits:2}) : '';
+
+  // Info grid
+  document.getElementById('info-grid').innerHTML = [
+    ['📋 Nota', p.folio, false],
+    ['📅 Fecha', p.fecha, false],
+    ['🏢 RFC Emisor', p.rfcEmisor, false],
+    ['👤 RFC Receptor', p.rfcReceptor, false],
+    ['💰 Subtotal sin IVA', fmt(p.subtotal), false],
+    ['🧾 IVA 16%', fmt(p.iva), false],
+    ['💵 Total MXN', fmt(p.total), false],
+    ['⭐ Puntos (÷$294)', p.points+' pts', true],
+  ].map(([l,v,h])=>`<div class="info-item ${h?'highlight':''}">
+    <div class="info-lbl">${l}</div>
+    <div class="info-val">${v||''}</div>
+  </div>`).join('');
+
+  // Combo count
+  document.getElementById('combo-count').textContent = combos.length+' combinaciones · más uniformes primero';
+
+  // Table head
+  document.getElementById('tbl-head').innerHTML = `<tr>
+    <th>#</th>
+    ${G_LABELS.map((g,i)=>`<th style="color:${G_COLORS[i]}">${g}<br/><span style="color:#aaa;font-weight:400;font-size:9px">≤${maxQ[i]}</span></th>`).join('')}
+    <th>Puntos</th><th>$Costo</th><th>Unif.</th>
+  </tr>`;
+
+  renderTableRows();
+
+  // More button
+  if (combos.length > 20) {
+    const btn = document.getElementById('btn-more');
+    btn.style.display = 'block';
+    btn.textContent = `▼ Ver todas las ${combos.length} combinaciones`;
+  }
+
+  // Download label
+  document.getElementById('btn-dl').innerHTML = `⬇ &nbsp;DESCARGAR EXCEL (${combos.length} combinaciones)`;
+  document.getElementById('footer-note').textContent =
+    '✔ G6 y G7 intercambiables (5 pts / $1,470 c/u)  ·  Rojo = excede stock  ·  Excel incluye hoja de información';
+}
+
+function cvScore(c) {
+  const m = c.reduce((a,b)=>a+b,0)/c.length;
+  return m ? Math.sqrt(c.reduce((s,x)=>s+(x-m)**2,0)/c.length)/m : 999;
+}
+
+function renderTableRows() {
+  const {combos} = state;
+  const maxQ = MAX_Q();
+  const vis  = state.showAll ? combos : combos.slice(0, 20);
+  document.getElementById('tbl-body').innerHTML = vis.map((c,i)=>{
+    const [g67,g5,g4,g3,g2,g1]=c;
+    const pts  = (g67*50+g5*25+g4*20+g3*17+g2*13+g1*10)/10;
+    const cost = g67*1470+g5*735+g4*588+g3*499.8+g2*382.2+g1*294;
+    const cv   = cvScore(c);
+    const [bc,bt] = cv<0.50?['badge-best','★']:cv<0.65?['badge-good','✓']:['badge-valid','·'];
+    return `<tr>
+      <td class="td-num">${i+1}</td>
+      ${c.map((v,j)=>`<td style="background:${G_COLORS[j]}18;color:${v>maxQ[j]?'#C00000':G_COLORS[j]};font-weight:700">${v}</td>`).join('')}
+      <td class="td-pts">${pts.toFixed(1)}</td>
+      <td class="td-cost">$${cost.toLocaleString('es-MX',{minimumFractionDigits:2})}</td>
+      <td class="${bc}">${bt}</td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleMore() {
+  state.showAll = !state.showAll;
+  renderTableRows();
+  const btn = document.getElementById('btn-more');
+  btn.textContent = state.showAll
+    ? '▲ Mostrar menos'
+    : `▼ Ver todas las ${state.combos.length} combinaciones`;
+}
+
+// ── Download ───────────────────────────────────────────────────────────────
+async function downloadExcel() {
+  const btn = document.getElementById('btn-dl');
+  btn.disabled = true; btn.innerHTML = '⏳ Generando Excel…';
+  try {
+    const r = await fetch('/api/download-excel', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({stock:state.stock, info:state.pdfInfo, combos:state.combos})
+    });
+    if (!r.ok) throw new Error('Error generando Excel');
+    const blob  = await r.blob();
+    const url   = URL.createObjectURL(blob);
+    const a     = document.createElement('a');
+    a.href      = url;
+    a.download  = `${state.pdfInfo?.folio||'combinaciones'}_grupos.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) { alert('Error: '+e.message); }
+  btn.disabled = false;
+  btn.innerHTML = `⬇ &nbsp;DESCARGAR EXCEL (${state.combos.length} combinaciones)`;
+}
+
+// ── Reset ──────────────────────────────────────────────────────────────────
+function resetAll() {
+  state = {stock:null, pdfFile:null, pdfInfo:null, combos:[], n:50, showAll:false};
+  ['dz1','dz2'].forEach(id => document.getElementById(id).classList.remove('loaded'));
+  document.getElementById('i1').textContent='📦'; document.getElementById('l1').textContent='Subir archivo de existencias';
+  document.getElementById('i2').textContent='📄'; document.getElementById('l2').textContent='Subir Nota de Crédito JCA';
+  document.getElementById('stock-preview').style.display='none';
+  document.getElementById('gen-area').style.display='none';
+  document.getElementById('upload-card').style.display='block';
+  document.getElementById('results-area').style.display='none';
+  document.getElementById('f1').value=''; document.getElementById('f2').value='';
+  setN(50); updateSteps(1);
+}
+</script>
+</body>
+</html>
